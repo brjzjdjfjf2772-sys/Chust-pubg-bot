@@ -1,73 +1,89 @@
-import telebot
-from telebot import types
+import asyncio
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
-TOKEN = "9227585908:AAHmCfNg9GE7cMcGiEhjJjAQHd1ThXwfbfQ"
-bot = telebot.TeleBot(TOKEN)
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
+# --- Render porti uchun veb-server (24/7 ishlashi uchun) ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
 
-# /start komandasi uchun menyu
-@bot.message_handler(commands=["start"])
-def send_welcome(message):
-  # Inline tugmalar yaratamiz
-  markup = types.InlineKeyboardMarkup(row_width=2)
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(('0.0.0.0', port), SimpleHandler)
+    server.serve_forever()
 
-  btn1 = types.InlineKeyboardButton(
-      "🔥 BLATATA PUBG", callback_data="blatata"
-  )
-  btn2 = types.InlineKeyboardButton(
-      "⚡ RUZENN PUBG", callback_data="ruzenn"
-  )
-  btn3 = types.InlineKeyboardButton(
-      "👑 RAMZES PUBG", callback_data="ramzes"
-  )
-  btn_back = types.InlineKeyboardButton(
-      "🔙 Orqaga qaytish", callback_data="back"
-  )
+threading.Thread(target=run_server, daemon=True).start()
+# -----------------------------------------------------------
 
-  markup.add(btn1, btn2, btn3, btn_back)
+# Telegram Bot Tokeningiz
+TOKEN = "9227585908:AAFo3U1x9FJXekbiAE6GBYdbu-rAAIiteNA"
 
-  bot.send_message(
-      message.chat.id,
-      "🤖 **PUBG MOBILE CHUST** botiga xush kelibsiz!\n\n"
-      "Marhamat, o'zingizga yoqqan PUBG o'yinchisini tanlang:",
-      reply_markup=markup,
-      parse_mode="Markdown",
-  )
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
 
+# YouTube kanal havolasi
+YOUTUBE_URL = "https://www.youtube.com/@JOHA_ANIME_UZ"
 
-# Tugmalar bosilganda ishlaydigan qism (Callback handler)
-@bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
-  if call.data == "blatata":
-    bot.answer_callback_query(call.id)
-    bot.send_message(
-        call.message.chat.id,
-        "👑 **BLATATA PUBG** 🥶\n\n"
-        "🔹 **CHUST:**\n`1-7638-5041-3477-3578-399`\n\n"
-        "🌐 vpn olish uchun: @zuzigbot\n"
-        "📢 Nakrutka: @SmmBilanBot",
-        parse_mode="Markdown",
+# 1. /start buyrug'i - Skrinshot talab qilish
+@dp.message(Command("start"))
+async def start_handler(message: types.Message):
+    youtube_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="▶️ YouTube kanalga o'tish", url=YOUTUBE_URL)]
+        ]
     )
-  elif call.data == "ruzenn":
-    bot.answer_callback_query(call.id)
-    bot.send_message(
-        call.message.chat.id,
-        "⚡ **RUZENN PUBG** 🥶\n\n"
-        "🔹 **UPR:**\n`1-7435-8664-3526-3935-296`\n\n"
-        "🔹 **CHUST:**\n`1-7435-8664-3526-3935-297`",
-        parse_mode="Markdown",
+    await message.answer(
+        "👋 Assalomu alaykum!\n\n"
+        "🤖 Botdan foydalanish uchun quyidagi shartni bajaring:\n"
+        "1️⃣ YouTube kanalimizga obuna bo'ling.\n"
+        "2️⃣ Obuna bo'lganingizni tasdiqlovchi **SKRINSHOT (rasm)** ni shu botga yuboring.\n\n"
+        "✨ Shundan so'ng bot avtomatik ishga tushadi!",
+        reply_markup=youtube_keyboard
     )
-  elif call.data == "ramzes":
-    bot.answer_callback_query(call.id)
-    bot.send_message(
-        call.message.chat.id,
-        "👑 **RAMZES PUBG** haqida ma'lumot tez kunda qo'shiladi!",
-    )
-  elif call.data == "back":
-    bot.answer_callback_query(call.id)
-    send_welcome(call.message)
 
+# 2. Xabarlarni tekshirish handler-i
+@dp.message()
+async def all_messages_handler(message: types.Message):
+    # Agar foydalanuvchi rasm yuborgan bo'lsa
+    if message.photo:
+        main_keyboard = ReplyKeyboardMarkup(
+            keyboard=[
+                [KeyboardButton(text="🎮 PUBG Statistika"), KeyboardButton(text="👥 O'yinchilar")],
+                [KeyboardButton(text="ℹ️ Yordam")]
+            ],
+            resize_keyboard=True
+        )
+        await message.answer(
+            "✅ Skrinshot qabul qilindi! Obunangiz tasdiqlandi.\n\n"
+            "🎉 CHUST PUBG BOTga xush kelibsiz. Kerakli bo'limni tanlang.",
+            reply_markup=main_keyboard
+        )
+    elif message.text and message.text.startswith("/help"):
+        await message.answer("Bu bot orqali siz PUBG o'yini bo'yicha ma'lumotlar olishingiz mumkin.")
+    elif message.text == "🎮 PUBG Statistika":
+        await message.answer("📊 PUBG statistikasini ko'rish uchun o'yinchi ID raqamini yuboring (Masalan: 123456789).")
+    elif message.text == "👥 O'yinchilar":
+        await message.answer("👥 Chust o'yinchilari ro'yxati shakllantirilmoqda...")
+    elif message.text == "ℹ️ Yordam":
+        await message.answer("🛠 Yordam va murojaat uchun adminga yozing:\n📞 Tel: +998945024209")
+    elif message.text and message.text.isdigit():
+        player_id = message.text
+        await message.answer(f"🔍 Qidirilmoqda... PUBG ID: {player_id}\n⚠️ Hozircha baza ulanmagani uchun ma'lumot topilmadi.")
+    else:
+        await message.answer("⚠️ Iltimos, oldin YouTube kanalga obuna bo'lib, **skrinshot yuboring**!")
 
-print("Bot ishga tushdi...")
-bot.polling()
-  
+# Botni ishga tushirish
+async def main():
+    print("Bot muvaffaqiyatli ishga tushdi...")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+      
